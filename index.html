@@ -1445,7 +1445,7 @@ function renderResults() {
 function reviewList() {
   const r = ExamEngine.session.results, f = App.review;
   return r.items.filter(x =>
-    (f.status === 'all' || x.status === f.status) &&
+    (f.status === 'all' || (f.status === 'marked' ? x.marked : x.status === f.status)) &&
     (f.domain === 'all' || x.q.domain === Number(f.domain)) &&
     (f.difficulty === 'all' || x.q.difficulty === f.difficulty));
 }
@@ -1453,8 +1453,8 @@ function renderReview() {
   const r = ExamEngine.session.results, f = App.review;
   const list = reviewList();
   const filtered = f.status !== 'all' || f.domain !== 'all' || f.difficulty !== 'all';
-  const counts = { all: r.total, correct: r.correct, incorrect: r.incorrect, unanswered: r.unanswered };
-  const statusLabels = { all: 'All questions', correct: 'Correct', incorrect: 'Incorrect', unanswered: 'Unanswered' };
+  const counts = { all: r.total, correct: r.correct, incorrect: r.incorrect, marked: r.items.filter(x => x.marked).length, unanswered: r.unanswered };
+  const statusLabels = { all: 'All questions', correct: 'Correct', incorrect: 'Incorrect', marked: 'Marked', unanswered: 'Unanswered' };
   const cards = list.length
     ? list.map(reviewCard).join('')
     : `<div class="empty"><h2>No questions match these filters</h2><p>Try a different result, domain, or difficulty.</p><button class="btn" data-action="review-reset">Show all questions</button></div>`;
@@ -1489,7 +1489,7 @@ function reviewCard(cur) {
     return `
     <article class="r-card r-card--${cur.status}" aria-labelledby="rq-${cur.index}">
       <header class="r-card__head">
-        <div class="r-card__title"><h2 id="rq-${cur.index}">Question ${cur.index + 1}</h2>${statusTag}</div>
+        <div class="r-card__title"><h2 id="rq-${cur.index}">Question ${cur.index + 1}</h2>${statusTag}${cur.marked ? `<span class="tag tag--review">${icon('flag', 13)}Marked</span>` : ''}</div>
         <div class="r-card__meta">
           <span class="q-domain"><b>Domain ${q.domain} – ${esc(domainById(q.domain).name)}</b>, ${esc(q.subdomain)}</span>
           ${difficultyBadge(q.difficulty)}<span class="q-id">${esc(q.id)}</span>
