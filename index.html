@@ -329,7 +329,7 @@ ul.r-links--grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8
 .tile dd small{font-size:14px;color:var(--ink-3);font-weight:400}
 .tile--correct dt svg{color:var(--correct)}
 .tile--wrong dt svg{color:var(--wrong)}
-.perf-grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:20px;align-items:start}
+.perf-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
 @media (max-width:960px){.perf-grid{grid-template-columns:1fr}}
 .perf-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .perf-head h2{margin:0;font-size:17px}
@@ -826,6 +826,7 @@ const EXAM_RULES = {
   questionCounts: [10, 20, 30, 60]
 };
 const QUESTION_BY_ID = Object.fromEntries(QUESTION_BANK.map(q => [q.id, q]));
+const EXAM_LEVELS = ['intermediate', 'difficult'];
 const domainById = id => DOMAINS.find(d => d.id === Number(id));
 EXAM_RULES.passRatio = (EXAM_RULES.passScore - EXAM_RULES.minScore) / (EXAM_RULES.maxScore - EXAM_RULES.minScore);
 const PASS_PCT = Math.round(EXAM_RULES.passRatio * 100);
@@ -847,8 +848,10 @@ function shuffle(list) {
 const ExamEngine = (() => {
   let s = null;
 
+  // Exams use only intermediate and difficult questions.
   function pool(scope, difficulty) {
     return QUESTION_BANK.filter(q =>
+      EXAM_LEVELS.includes(q.difficulty) &&
       (scope === 'full' || q.domain === Number(scope)) &&
       (difficulty === 'all' || q.difficulty === difficulty));
   }
@@ -907,7 +910,7 @@ const ExamEngine = (() => {
       passed: scoreValue >= EXAM_RULES.passScore,
       official: session.config.mode === 'timed' && total === EXAM_RULES.officialQuestions,
       byDomain: group(DOMAINS.map(d => d.id), q => q.domain),
-      byDifficulty: group(Object.keys(DIFFICULTY), q => q.difficulty),
+      byDifficulty: group(EXAM_LEVELS, q => q.difficulty),
       timed: session.durationMs !== null,
       durationMs: session.durationMs,
       timeUsedMs: session.submittedAt - session.startedAt,
@@ -1016,7 +1019,7 @@ const listJoin = xs => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', 
 function examConfig(mode) {
   return mode === 'timed'
     ? { mode, scope: 'full', count: EXAM_RULES.officialQuestions, difficulty: 'all' }
-    : { mode, scope: 'full', count: App.config.count, difficulty: App.config.difficulty };
+    : { mode, scope: 'full', count: App.config.count, difficulty: 'all' };
 }
 const scenarioLine = q => q.scenario ? `<p class="q-scenario">Scenario: ${esc(q.scenario)}</p>` : '';
 const linkHost = url => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
@@ -1095,20 +1098,16 @@ function renderDashboard() {
         <div class="field">
           <span class="field__label" id="lbl-count">Number of questions</span>
           <div class="seg" role="group" aria-labelledby="lbl-count">${seg('count', EXAM_RULES.questionCounts, v => v, c.count)}</div>
-        </div>
-        <div class="field">
-          <span class="field__label" id="lbl-diff">Difficulty</span>
-          <div class="seg" role="group" aria-labelledby="lbl-diff">${seg('difficulty', ['all', 'easy', 'intermediate', 'difficult'], diffLabel, c.difficulty)}</div>
         </div>`;
 
   const modeLine = timed
-    ? `<p><strong>Timed exam:</strong> ${EXAM_RULES.officialQuestions} questions in ${minutes} minutes, all difficulty levels. Scored from 100 to 1000, with 720 to pass.</p>`
-    : `<p><strong>Practice exam:</strong> ${c.count} questions, ${esc(diffLabel(c.difficulty).toLowerCase())}, no time limit. Scored as a practice result.</p>`;
+    ? `<p><strong>Timed exam:</strong> ${EXAM_RULES.officialQuestions} questions in ${minutes} minutes. Scored from 100 to 1000, with 720 to pass.</p>`
+    : `<p><strong>Practice exam:</strong> ${c.count} questions, no time limit. Scored as a practice result.</p>`;
   const planHtml = `<div class="plan"><p>Questions per domain, following the exam blueprint:</p><ul class="plan-list">${pl.parts.map(p =>
     `<li><span>Domain ${p.domain} – ${esc(domainById(p.domain).name)}</span><span>${p.n}</span></li>`).join('')}</ul></div>`;
   const availLine = canStart
     ? `<p>Each start draws a new set of questions at random, with no repeats, and shuffles the answer order.</p>`
-    : `<p class="warn-text">There aren’t enough ${esc(diffLabel(c.difficulty).toLowerCase())} questions for a ${c.count}-question exam. Choose fewer questions or a wider difficulty.</p>`;
+    : `<p class="warn-text">There aren’t enough questions for a ${c.count}-question exam. Choose fewer questions.</p>`;
   const alerts = [...BANK_ERRORS, ...BANK_WARNINGS];
 
   return `
@@ -1239,7 +1238,6 @@ function renderExam() {
           <span class="q-domain"><b>Domain ${q.domain} – ${esc(domainById(q.domain).name)}</b><br>${esc(q.subdomain)}</span>
           <span class="q-meta__end">
             ${marked ? `<span class="tag tag--review">${icon('flag', 13)}Marked for review</span>` : ''}
-            ${difficultyBadge(q.difficulty)}
             <span class="q-id">${esc(q.id)}</span>
           </span>
         </header>
@@ -1386,7 +1384,7 @@ function renderResults() {
     <div class="container page-head__inner">
       <div>
         <h1>${official ? 'Certification simulation result' : 'Practice exam result'}</h1>
-        <p>${c.mode === 'timed' ? 'Timed exam' : 'Practice exam'}, ${r.total} questions, ${esc(diffLabel(c.difficulty).toLowerCase())}</p>
+        <p>${c.mode === 'timed' ? 'Timed exam' : 'Practice exam'}, ${r.total} questions</p>
       </div>
       <div class="page-head__actions">
         <button class="btn" data-action="new-exam">Change setup</button>
@@ -1428,10 +1426,6 @@ function renderResults() {
           ? `<div class="focus-box"><h3>Focus your study here</h3><ul>${lowDomains.map(d => `<li><span>Domain ${d.key} – ${esc(domainById(d.key).name)}: ${d.pct}%</span><button class="link-btn" data-action="review-domain" data-domain="${d.key}">Review these questions</button></li>`).join('')}</ul></div>`
           : `<div class="focus-box focus-box--ok"><h3>No weak domains</h3><p style="margin:0;font-size:14px">Every domain in this exam is at ${PASS_PCT}% or higher.</p></div>`}
       </section>
-      <section class="panel" aria-labelledby="diff-h">
-        <div class="perf-head"><h2 id="diff-h">Performance by difficulty</h2></div>
-        ${r.byDifficulty.map(d => perfRow(DIFFICULTY[d.key].label, '', d)).join('')}
-      </section>
     </div>
     <div class="results-actions">
       <button class="btn btn--primary" data-action="open-review">Review Answers</button>
@@ -1457,7 +1451,7 @@ function renderReview() {
   const statusLabels = { all: 'All questions', correct: 'Correct', incorrect: 'Incorrect', marked: 'Marked', unanswered: 'Unanswered' };
   const cards = list.length
     ? list.map(reviewCard).join('')
-    : `<div class="empty"><h2>No questions match these filters</h2><p>Try a different result, domain, or difficulty.</p><button class="btn" data-action="review-reset">Show all questions</button></div>`;
+    : `<div class="empty"><h2>No questions match these filters</h2><p>Try a different result or domain.</p><button class="btn" data-action="review-reset">Show all questions</button></div>`;
   const countLine = filtered
     ? `<p class="r-count"><span>Showing ${list.length} of ${r.total} questions</span><button class="link-btn" data-action="review-reset">Clear filters</button></p>`
     : `<p class="r-count"><span>Showing all ${r.total} questions</span></p>`;
@@ -1545,12 +1539,6 @@ function REVIEW_PAGE(r, f, counts, statusLabels, countLine, cards) {
         <select class="select" data-change="review-domain">
           <option value="all">All domains</option>
           ${DOMAINS.map(d => `<option value="${d.id}" ${String(f.domain) === String(d.id) ? 'selected' : ''}>Domain ${d.id} – ${esc(d.name)}</option>`).join('')}
-        </select>
-      </label>
-      <label>Difficulty
-        <select class="select" data-change="review-difficulty">
-          <option value="all">All levels</option>
-          ${Object.keys(DIFFICULTY).map(d => `<option value="${d}" ${f.difficulty === d ? 'selected' : ''}>${DIFFICULTY[d].label}</option>`).join('')}
         </select>
       </label>
     </div>
